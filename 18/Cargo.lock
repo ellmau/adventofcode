@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "aoc-2021-17-shots"
+name = "aoc-2021-18-snailfish"
 version = "0.1.0"
 dependencies = [
  "env_logger",
