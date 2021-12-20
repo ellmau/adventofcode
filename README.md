@@ -10,4 +10,6 @@ Each folder up to 15 consists of a rust project, which solves the given problem 
 
 From folder 16 on, the examples are inside test environments and the program just runs the file `input`.
 
+Note that I usually do not focus on error-management due to wrong input file formats.
+
 The problems can be found at https://adventofcode.com/2021
