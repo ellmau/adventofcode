@@ -1,8 +1,12 @@
 use itertools::Itertools;
+
 fn main() {
     env_logger::init();
     let input = parse(&std::fs::read_to_string("input").expect("IO error"));
+    let input2 = input.gen_part_2();
     log::info!("minimal costs are {}", part1(&input));
+
+    log::info!("minimal costs are {}", part1(&input2));
 }
 
 fn part1(start: &State) -> usize {
@@ -35,6 +39,9 @@ fn part1(start: &State) -> usize {
                 }
             });
         });
+        if min < usize::MAX {
+            log::info!("current min: {}", min);
+        }
         new_states.sort_unstable();
         new_states.dedup();
         states = new_states;
@@ -47,6 +54,7 @@ struct State {
     corridor: Vec<Option<u8>>,
     rooms: Vec<Vec<Option<u8>>>,
     costs: usize,
+    size: usize,
 }
 
 impl Default for State {
@@ -55,6 +63,7 @@ impl Default for State {
             corridor: vec![None; 11],
             rooms: vec![vec![None; 2]; 4],
             costs: 0,
+            size: 2,
         }
     }
 }
@@ -70,6 +79,7 @@ impl State {
         result.rooms[2].insert(1, Some(0));
         result.rooms[3].insert(1, Some(0));
         result.rooms[3].insert(1, Some(2));
+        result.size = 4;
         result
     }
     fn new() -> Self {
@@ -85,27 +95,30 @@ impl State {
 
     fn do_move(&mut self, mv: (usize, usize)) -> usize {
         let (from, to) = mv;
-        let mut amphi = self.which_amphi(from);
+        let amphi = self.which_amphi(from);
         let mut steps = 0usize;
         if let Some(from_room) = Self::corridor_to_room(from) {
-            if self.rooms[from_room][1].is_some() {
-                self.rooms[from_room][1] = None;
-                steps += 1;
-            } else {
-                self.rooms[from_room][0] = None;
-                steps += 2;
-            }
+            let (base_step, room_value) = self.rooms[from_room]
+                .iter_mut()
+                .rev()
+                .enumerate()
+                .find(|(_idx, elem)| elem.is_some())
+                .expect("some check before was wrong");
+            steps += base_step + 1;
+            *room_value = None;
         } else {
             self.corridor[from] = None;
         }
         if let Some(to_room) = Self::corridor_to_room(to) {
-            if self.rooms[to_room][0].is_some() {
-                self.rooms[to_room][1] = amphi;
-                steps += 1;
-            } else {
-                self.rooms[to_room][0] = amphi;
-                steps += 2;
-            }
+            let (base_step, room_value) = self.rooms[to_room]
+                .iter_mut()
+                .rev()
+                .enumerate()
+                .rev()
+                .find(|(_idx, elem)| elem.is_none())
+                .expect("some check before was wrong");
+            steps += base_step + 1;
+            *room_value = amphi;
         } else {
             self.corridor[to] = amphi
         };
@@ -114,6 +127,7 @@ impl State {
         steps * 10usize.pow(amphi.unwrap() as u32)
     }
 
+    /// only used for the part 1 parsing action
     fn to_room(&mut self, amph: u8, pos: usize) -> bool {
         match Self::room_vaccancy(&self.rooms[pos]) {
             // free room
@@ -158,10 +172,20 @@ impl State {
                 return false;
             }
             if let Some(amphi) = self.which_amphi(from) {
-                if amphi as usize == from_room && self.rooms[from_room][1] != Some(amphi) {
+                if amphi as usize == from_room
+                    && self.rooms[from_room]
+                        .iter()
+                        .filter(|x| x.is_some())
+                        .all(|x| *x == Some(amphi))
+                {
                     log::trace!("amphi already at right position -> false");
                     return false;
                 }
+            }
+        } else {
+            if Self::corridor_to_room(to).is_none() {
+                log::trace!("amphi moving on the corridor -> false");
+                return false;
             }
         }
         if self.which_amphi(from).is_none() {
@@ -215,10 +239,9 @@ impl State {
 
     fn which_amphi(&self, pos: usize) -> Option<u8> {
         if let Some(room) = Self::corridor_to_room(pos) {
-            if self.rooms[room][1].is_none() {
-                self.rooms[room][0]
-            } else {
-                self.rooms[room][1]
+            match self.rooms[room].iter().rev().find(|x| x.is_some()) {
+                Some(x) => *x,
+                None => None,
             }
         } else {
             self.corridor[pos]
@@ -229,13 +252,13 @@ impl State {
         room.iter().filter(|x| x.is_some()).count()
     }
 
-    fn free_rooms(&self) -> impl Iterator<Item = usize> {
+    fn free_rooms(&self) -> impl Iterator<Item = usize> + '_ {
         self.rooms
             .clone()
             .into_iter()
             .enumerate()
             .filter(|(idx, room)| {
-                Self::room_vaccancy(room) < 2
+                Self::room_vaccancy(room) < self.size
                     && room
                         .iter()
                         .filter(|r| {
@@ -248,7 +271,7 @@ impl State {
                         .count()
                         == 0
             })
-            .map(|(idx, room)| idx)
+            .map(|(idx, _room)| idx)
     }
 
     fn is_goal(&self, pos: usize) -> bool {
@@ -262,11 +285,11 @@ impl State {
                 }
             })
             .count()
-            == 2
+            == self.size
     }
 
     fn goal_reached(&self) -> bool {
-        (0..4).fold(true, |acc, i| acc && self.is_goal(i))
+        (0..4).all(|i| self.is_goal(i))
     }
 }
 
@@ -336,6 +359,7 @@ mod test {
                     vec![Some(0), Some(3)]
                 ],
                 costs: 0,
+                size: 2,
             }
         );
     }
@@ -357,6 +381,7 @@ mod test {
                 vec![Some(0), Some(3)],
             ],
             costs: 0,
+            size: 2,
         };
 
         assert!(!test.is_goal(0));
@@ -373,6 +398,7 @@ mod test {
                 vec![Some(3), Some(3)],
             ],
             costs: 1,
+            size: 2,
         };
 
         assert!(test.goal_reached());
