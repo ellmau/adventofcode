@@ -70,7 +70,7 @@ fn find_model(program: &[Com]) -> (usize, usize) {
         }),
     });
     let mut min = usize::MAX;
-    let mut max = 0usize;
+    let mut max = 0;
 
     alus.iter().for_each(|(alu, (amin, amax))| {
         if alu.register[3] == 0 {
